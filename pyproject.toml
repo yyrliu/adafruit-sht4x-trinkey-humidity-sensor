@@ -8,4 +8,5 @@ dependencies = [
     "ipykernel>=6.29.5",
     "matplotlib>=3.10.3",
     "pandas>=2.2.3",
+    "pyserial>=3.5",
 ]

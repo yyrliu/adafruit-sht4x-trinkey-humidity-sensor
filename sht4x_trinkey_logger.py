@@ -6,6 +6,10 @@ import serial.tools.list_ports
 # Configuration
 BAUD_RATE = 115200
 BASE_CSV_FILE_PATH = 'sensor_readings'
+SENSOR_READ_INTERVAL = 10  # seconds
+
+assert type(SENSOR_READ_INTERVAL) is int, "SENSOR_READ_INTERVAL must be an integer."
+assert SENSOR_READ_INTERVAL > 0, "SENSOR_READ_INTERVAL must be greater than 0."
 
 def create_file_name(base_path):
     """Create a timestamped CSV filename."""
@@ -80,6 +84,7 @@ def request_sensor_stream(serial_handles):
     """Send 's' to all sensors to start streaming."""
     for port, ser, _ in serial_handles:
         ser.write(b's')
+        ser.write(SENSOR_READ_INTERVAL)
         time.sleep(0.1)
         print(f"Message from {port.device}:\n{empty_serial_buffer(ser)}")
 

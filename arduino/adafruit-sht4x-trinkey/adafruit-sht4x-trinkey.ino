@@ -16,6 +16,7 @@
 Adafruit_SHT4x sht4 = Adafruit_SHT4x();
 Adafruit_NeoPixel pixel(1, PIN_NEOPIXEL, NEO_GRB + NEO_KHZ800);
 
+int sampleInterval = 1000;
 uint32_t sht4SerialNumber;
 
 void setup() {
@@ -39,7 +40,7 @@ void setup() {
 
   Serial.println(SETUP_MSG);
 
-  pixel.setPixelColor(0, 0xFFFFFF);
+  pixel.setPixelColor(0, 0x3F3F3F);
   pixel.show();
   
   while (1) {
@@ -54,6 +55,16 @@ void setup() {
       Serial.print("0x");
       Serial.println(sht4SerialNumber, HEX);
     } else if (input == 's') {
+      delay(100);
+      int sampleIntervalInSec = Serial.parseInt();
+      if (sampleIntervalInSec == 0) {
+        Serial.println("# Invalid sampling interval, using default 1000 ms");
+      } else {
+        sampleInterval = sampleIntervalInSec * 1000;
+        Serial.print("# Sampling interval set to ");
+        Serial.print(sampleInterval);
+        Serial.println(" ms");
+      }
       Serial.println("# Measuring...");
       break;
     } else {
@@ -84,14 +95,13 @@ void loop() {
     Serial.print(temp.temperature);
     Serial.print(", ");
     Serial.println(humidity.relative_humidity);
-    delay(50);
-    pixel.setPixelColor(0, 0x00FF00);
+    pixel.setPixelColor(0, 0x000000);
     pixel.show();
   } else {
     pixel.setPixelColor(0, 0xFFFF00);
     pixel.show();
-    Serial.println("Error reading from sensor, retrying in 1 sec...");
+    Serial.println("Error reading from sensor, retrying...");
   }
 
-  delay(1000);
+  delay(sampleInterval);
 }

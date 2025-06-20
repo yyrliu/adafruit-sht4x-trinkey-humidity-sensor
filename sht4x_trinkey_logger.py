@@ -8,8 +8,31 @@ BAUD_RATE = 115200
 BASE_CSV_FILE_PATH = 'sensor_readings'
 SENSOR_READ_INTERVAL = 10  # seconds
 
+serial_number_to_color = {
+    "0xEFCF86D7": 'yellow',
+    "0xF030D05B": 'blue',
+    "0xF030D0CF": 'red'
+}
+
 assert type(SENSOR_READ_INTERVAL) is int, "SENSOR_READ_INTERVAL must be an integer."
 assert SENSOR_READ_INTERVAL > 0, "SENSOR_READ_INTERVAL must be greater than 0."
+
+class MySerial(serial.Serial):
+
+    """Custom serial class to handle specific device behavior."""
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def setDeviceColorBySerialNumber(self, serial_number):
+        """Set the device color based on its serial number."""
+        try:
+            color_max_length = max(len(color) for color in serial_number_to_color.values())
+            self.color = serial_number_to_color[serial_number]
+            self.device_with_color = f"{self.port} {f'({self.color})':>{color_max_length + 3}}"
+        except KeyError:
+            print(f"Unknown serial number: {serial_number}. Setting color to 'unknown'.")
+            self.color = 'unknown'
+            self.device_with_color = f"{self.port} ({self.color})"
 
 def create_file_name(base_path):
     """Create a timestamped CSV filename."""
@@ -43,8 +66,8 @@ def create_header(serial_handles):
     """Create a CSV header based on serial numbers."""
     header = ["timestamp"]
     for _, _, serial_number in serial_handles:
-        header.append(f"{serial_number}_temperature (degrees C)")
-        header.append(f"{serial_number}_humidity (% rH)")
+        header.append(f"{serial_number}_{serial_number_to_color[serial_number]}_temperature (degrees C)")
+        header.append(f"{serial_number}_{serial_number_to_color[serial_number]}_humidity (% rH)")
     return header
 
 def empty_serial_buffer(ser):
@@ -59,7 +82,7 @@ def open_serial_ports(adafruit_ports):
     serial_handles = []
     for port in adafruit_ports:
         try:
-            ser = serial.Serial(port.device, BAUD_RATE, timeout=0.1)
+            ser = MySerial(port.device, BAUD_RATE, timeout=0.1)
             time.sleep(0.1)
             print(f"Message from {port.device}:\n{empty_serial_buffer(ser)}")
             serial_number = get_serial_number(ser)
@@ -67,6 +90,7 @@ def open_serial_ports(adafruit_ports):
                 print(f"Could not read serial number from {port.device}.")
                 ser.close()
                 continue
+            ser.setDeviceColorBySerialNumber(serial_number)
             serial_handles.append((port, ser, serial_number))
             print(f"Opened {port.device}, serial number: {serial_number}")
         except Exception as e:
@@ -85,7 +109,7 @@ def request_sensor_stream(serial_handles):
     for port, ser, _ in serial_handles:
         ser.write(f's{SENSOR_READ_INTERVAL}'.encode("ascii"))
         time.sleep(0.1)
-        print(f"Message from {port.device}:\n{empty_serial_buffer(ser)}")
+        print(f"Message from {ser.device_with_color}:\n{empty_serial_buffer(ser)}")
 
 def log_sensor_data(serial_handles, header, csv_file_path):
     """Continuously log sensor data to CSV."""
@@ -101,19 +125,19 @@ def log_sensor_data(serial_handles, header, csv_file_path):
                         if not line:
                             continue
                         if line.startswith('#'):
-                            print(f"{port.device}: Comment line: {line}")
+                            print(f"{ser.device_with_color}: Comment line: {line}")
                             continue
                         parsed = parse_sensor_line(line)
                         if not parsed:
-                            print(f"{port.device}: Malformed line: {line}")
+                            print(f"{ser.device_with_color}: Malformed line: {line}")
                             continue
                         _, timestamp, temperature, humidity = parsed
                         row[0] = timestamp
                         row[i*2+1:i*2+3] = [temperature, humidity]
                         writer.writerow(row)
-                        print(f"{port.device}: Logged: {row}")
+                        print(f"{ser.device_with_color}: Logged: {row}")
                     except Exception as e:
-                        print(f"{port.device}: Error: {e}")
+                        print(f"{ser.device_with_color}: Error: {e}")
             time.sleep(0.05)
 
 def close_serial_ports(serial_handles):

@@ -83,8 +83,7 @@ def write_csv_header(csv_file_path, header):
 def request_sensor_stream(serial_handles):
     """Send 's' to all sensors to start streaming."""
     for port, ser, _ in serial_handles:
-        ser.write(b's')
-        ser.write(SENSOR_READ_INTERVAL)
+        ser.write(f's{SENSOR_READ_INTERVAL}'.encode("ascii"))
         time.sleep(0.1)
         print(f"Message from {port.device}:\n{empty_serial_buffer(ser)}")
 

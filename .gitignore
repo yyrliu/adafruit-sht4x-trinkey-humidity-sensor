@@ -208,3 +208,6 @@ __marimo__/
 
 # logs
 *.csv
+!sensor_readings_20250620_125414.csv
+!sensor_readings_20250623_140525.csv
+!sensor_readings_20250627_121615.csv

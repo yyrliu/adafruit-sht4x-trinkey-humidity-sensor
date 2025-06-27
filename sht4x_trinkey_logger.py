@@ -6,7 +6,7 @@ import serial.tools.list_ports
 # Configuration
 BAUD_RATE = 115200
 BASE_CSV_FILE_PATH = 'sensor_readings'
-SENSOR_READ_INTERVAL = 10  # seconds
+SENSOR_READ_INTERVAL = 1  # seconds
 
 serial_number_to_color = {
     "0xEFCF86D7": 'yellow',
@@ -138,6 +138,7 @@ def log_sensor_data(serial_handles, header, csv_file_path):
                         print(f"{ser.device_with_color}: Logged: {row}")
                     except Exception as e:
                         print(f"{ser.device_with_color}: Error: {e}")
+            file.flush()
             time.sleep(0.05)
 
 def close_serial_ports(serial_handles):

@@ -127,17 +127,34 @@ def write_csv_header(csv_file_path, header):
 def request_sensor_stream(serial_handles):
     """Send 's' to all sensors to start streaming."""
     for port, ser, _ in serial_handles:
-        ser.write(f"s{SENSOR_READ_INTERVAL}".encode("ascii"))
+        ser.write(b"s")
         time.sleep(0.1)
         print(f"Message from {ser.device_with_color}:\n{empty_serial_buffer(ser)}")
 
 
-def log_sensor_data(serial_handles, header, csv_file_path):
+def request_sensor_update(serial_handles):
+    """Send 's' to all sensors to start streaming."""
+    for port, ser, _ in serial_handles:
+        ser.write(b"u")
+    time.sleep(0.1)
+
+
+def log_sensor_data(serial_handles, header, csv_file_path, update_interval=SENSOR_READ_INTERVAL):
     """Continuously log sensor data to CSV."""
     print(f"Starting data logging to {csv_file_path}... Press Ctrl+C to stop.")
+
+    last_update_time = time.time()
     with open(csv_file_path, mode="a", newline="") as file:
         writer = csv.writer(file)
         while True:
+
+            current_time = time.time()
+            if current_time - last_update_time < update_interval:
+                time.sleep(0.05)
+                continue
+
+            last_update_time = current_time
+            request_sensor_update(serial_handles)
             for i, (port, ser, serial_number) in enumerate(serial_handles):
                 row = [None] * len(header)
                 if ser.in_waiting:

@@ -42,6 +42,7 @@ Adafruit_NeoPixel pixel(1, PIN_NEOPIXEL, NEO_GRB + NEO_KHZ800);
 
 // Global variables
 uint32_t sht4SerialNumber;        // Sensor serial number
+unsigned long startMeasurementTime; // Start time of measurement mode
 
 /**
  * Handle sensor decontamination heating process
@@ -158,6 +159,7 @@ void setup() {
       Serial.print("Enabled the watchdog with max countdown of ");
       Serial.print(countdownMS);
       Serial.println(" milliseconds!");
+      startMeasurementTime = millis();
       break;  // Exit command loop and proceed to measurement mode
       
     } else if (input == 'h') {
@@ -204,7 +206,7 @@ void loop() {
       Serial.print("0x");
       Serial.print(sht4SerialNumber, HEX);
       Serial.print(", ");
-      Serial.print(millis());
+      Serial.print(millis() - startMeasurementTime);
       Serial.print(", ");
       Serial.print(temp.temperature);
       Serial.print(", ");

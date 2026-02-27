@@ -18,6 +18,7 @@
  */
 
 #include <Arduino.h>
+#include <Wire.h>
 #include "Adafruit_SHT4x.h"
 #include <Adafruit_NeoPixel.h>
 #include <Adafruit_SleepyDog.h>
@@ -27,6 +28,7 @@
 #define WATCHDOG_TIMEOUT_MS 60000                    // 60 second watchdog timeout
 #define DEFAULT_DECONTAMINATION_MS (30 * 60 * 1000)  // 30 minutes default decontamination
 #define DECONTAMINATION_STATUS_INTERVAL 5000         // Status update interval during decontamination
+#define DECONTAM_SKIPS 30                             // Number of heating loops between reads
 
 // LED Color Definitions
 #define LED_INIT        0x0000FF  // Blue - Initializing
@@ -74,26 +76,88 @@ void handleDecontamination() {
   
   // Monitor decontamination process
   sensors_event_t humidity, temp;
+  unsigned int cycleCount = 0;
+
   while (millis() < decontaminationUntil) {
-    if (!sht4.getEvent(&humidity, &temp)) {
-      // Error reading sensor - abort decontamination
-      pixel.setPixelColor(0, LED_ERROR);
-      pixel.show();
-      Serial.println("Error reading from sensor, abort...");
-      break;
-    } 
-    
-    // Display status every ~5 seconds
-    long countdown = decontaminationUntil - millis();
-    if (countdown % DECONTAMINATION_STATUS_INTERVAL < 1000) {
+    if (cycleCount % DECONTAM_SKIPS != 0) {
+      // Raw I2C heating cycle - skip read and delay only until ACk
+      Wire.beginTransmission(SHT4x_DEFAULT_ADDR);
+      Wire.write(SHT4x_HIGHHEAT_1S); // 0x39
+      Wire.endTransmission();
+      
+      // The datasheet specifies 1.10s max measurement duration for 1s high heater.
+      // Wait roughly 1s then poll until sensor ACKs
+      delay(800);
+      
+      // Poll I2C address for ACK indicating completion
+      while (true) {
+        Wire.requestFrom(SHT4x_DEFAULT_ADDR, 6);
+        if (Wire.available()) {
+          break;
+        }
+        delay(1);
+      }
+    } else {
+      // Perform full I2C read cycle every DECONTAM_SKIPS loops
+      Wire.beginTransmission(SHT4x_DEFAULT_ADDR);
+      Wire.write(SHT4x_HIGHHEAT_1S); // 0x39
+      Wire.endTransmission();
+      
+      // The datasheet specifies 1.10s max measurement duration for 1s high heater.
+      // Wait roughly 1s then poll until sensor ACKs
+      delay(800);
+      
+      unsigned long wait_until = millis() + 1000; // Wait up to 5 seconds for ACK
+      while (true) {
+        Wire.requestFrom(SHT4x_DEFAULT_ADDR, 6);
+        if (Wire.available()) {
+          break; // ACK received, heating & measurement complete
+        }
+        if (millis() > wait_until) {
+          pixel.setPixelColor(0, LED_ERROR);
+          pixel.show();
+          Serial.println("Error reading from sensor, abort...");
+          return; // Exit decontamination on error
+        }
+        delay(1);
+      }
+
+      uint8_t readbuffer[6];
+      for (int i = 0; i < 6; i++) {
+        readbuffer[i] = Wire.read();
+      }
+
+
+      float t_ticks = (uint16_t)readbuffer[0] * 256 + (uint16_t)readbuffer[1];
+      float rh_ticks = (uint16_t)readbuffer[3] * 256 + (uint16_t)readbuffer[4];
+      unsigned long countdown = decontaminationUntil - millis();
       Serial.print("Decontaminating: T=");
-      Serial.print(temp.temperature);
+      Serial.print(-45 + 175 * t_ticks / 65535);
       Serial.print("°C, RH=");
-      Serial.print(humidity.relative_humidity);
+      Serial.print(-6 + 125 * rh_ticks / 65535);
       Serial.print("%, ");
       Serial.print(countdown);
       Serial.println(" ms left");
+
+      // if (!sht4.getEvent(&humidity, &temp)) {
+      //   // Error reading sensor - abort decontamination
+      //   pixel.setPixelColor(0, LED_ERROR);
+      //   pixel.show();
+      //   Serial.println("Error reading from sensor, abort...");
+      //   break;
+      // } 
+      
+      // // Display status using the freshly read data
+      // long countdown = decontaminationUntil - millis();
+      // Serial.print("Decontaminating: T=");
+      // Serial.print(temp.temperature);
+      // Serial.print("°C, RH=");
+      // Serial.print(humidity.relative_humidity);
+      // Serial.print("%, ");
+      // Serial.print(countdown);
+      // Serial.println(" ms left");
     }
+    cycleCount++;
   }
   
   // Decontamination complete - return to ready state
